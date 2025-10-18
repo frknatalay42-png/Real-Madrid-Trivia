@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Real Madrid Trivia</title>
+  <style>
+    :root{--bg:#0b1020;--card:#0f1724;--accent:#c8c8ff;--muted:#9aa4bf}
+    *{box-sizing:border-box;font-family:Inter,ui-sans-serif,system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial}
+    body{margin:0;min-height:100vh;background:linear-gradient(180deg,#071026 0%,#071027 60%),var(--bg);color:#e6eef8;display:flex;align-items:center;justify-content:center;padding:24px}
+    .app{width:100%;max-width:980px;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:12px;padding:22px;box-shadow:0 10px 30px rgba(2,6,23,0.7)}
+    header{display:flex;align-items:center;gap:12px}
+    header h1{margin:0;font-size:20px}
+    .controls{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+    select,input[type=number],button{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px 10px;border-radius:8px;color:var(--accent)}
+    button.primary{background:linear-gradient(90deg,#1f6feb,#6b8cff);border:none;color:white}
+    main{margin-top:18px}
+    .card{background:var(--card);padding:18px;border-radius:10px}
+    .question{font-size:18px;margin-bottom:12px}
+    .options{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .option{padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);cursor:pointer}
+    .option.disabled{opacity:0.6;cursor:default}
+    .option.correct{outline:3px solid rgba(50,200,120,0.18)}
+    .option.wrong{outline:3px solid rgba(255,80,80,0.12)}
+    .footer{display:flex;justify-content:space-between;align-items:center;margin-top:12px}
+    .progress{height:8px;background:rgba(255,255,255,0.03);border-radius:6px;overflow:hidden;width:60%}
+    .progress > i{display:block;height:100%;background:linear-gradient(90deg,#4fd1c5,#667eea);width:0%}
+    .score{font-size:14px;color:var(--muted)}
+    .meta{display:flex;gap:10px;align-items:center}
+    .results{padding:12px;border-radius:10px;margin-top:12px;background:linear-gradient(180deg,rgba(255,255,255,0.015),transparent)}
+    .small{font-size:13px;color:var(--muted)}
+    footer.small{font-size:12px;margin-top:10px;color:var(--muted)}
+    @media (max-width:640px){.options{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44'><rect width='44' height='44' rx='8' fill='%23071027'/><text x='50%' y='55%' dominant-baseline='middle' text-anchor='middle' font-family='Arial' font-size='18' fill='%23c8c8ff'>RM</text></svg>" alt="logo" style="width:44px;height:44px;border-radius:8px">
+      <div>
+        <h1>Real Madrid Trivia</h1>
+        <div class="small">200 questions • 4 difficulty levels • 20 random questions per quiz</div>
+      </div>
+    </header>
+
+    <div class="controls">
+      <label class="small">Difficulty mix:
+        <select id="difficultyMix">
+          <option value="mixed">Mixed (random from all levels)</option>
+          <option value="balanced">Balanced (5 easy / 5 medium / 5 hard / 5 expert)</option>
+          <option value="easy">Mostly easy</option>
+          <option value="hard">Mostly hard</option>
+        </select>
+      </label>
+      <label class="small">Questions:
+        <input id="numQ" type="number" min="5" max="50" value="20">
+      </label>
+      <button id="startBtn" class="primary">Start Quiz</button>
+      <button id="shuffleBtn">New random 20</button>
+    </div>
+
+    <main>
+      <div id="quizArea" class="card">
+        <div id="intro">
+          <p>Press <strong>Start Quiz</strong> to get 20 random questions from the 200-question pool. Use the difficulty selector to control the mix.</p>
+        </div>
+
+        <div id="qa" style="display:none">
+          <div class="question" id="qText"></div>
+          <div class="options" id="options"></div>
+          <div class="footer">
+            <div class="meta">
+              <div class="score" id="score">Score: 0</div>
+              <div class="small" id="qCount">0 / 20</div>
+            </div>
+            <div class="progress"><i id="progressBar"></i></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button id="nextBtn">Next</button>
+            <button id="revealBtn">Reveal Answer</button>
+            <button id="restartBtn">Restart Quiz</button>
+          </div>
+        </div>
+
+        <div id="results" style="display:none" class="results">
+          <h3 id="finalTitle">Results</h3>
+          <p id="finalText" class="small"></p>
+          <button id="tryAgain">Try another random 20</button>
+        </div>
+
+      </div>
+
+
+    </main>
+  </div>
+
+  <script>
+    // ===== Question pool: 200 questions, 4 difficulty levels (1=easy,2=medium,3=hard,4=expert)
+    // The questions favor historically stable facts to avoid time-sensitive errors.
+    const QUESTIONS = [
+      // EASY (50)
+      {q: 'What city is Real Madrid based in?', options: ['Barcelona','Valencia','Seville','Madrid'], a:3, lvl:1},
+      {q: 'What are the traditional home colours of Real Madrid?', options: ['Blue','White','Red','Green'], a:1, lvl:1},
+      {q: 'What is the commonly used nickname for Real Madrid?', options: ['The Red Devils','Los Blancos','The Gunners','The Lilywhites'], a:1, lvl:1},
+      {q: 'What is the name of Real Madrid\'s home stadium?', options: ['Camp Nou','Santiago Bernabéu','Metropolitano','San Mamés'], a:1, lvl:1},
+      {q: 'Real Madrid is a football club from which country?', options: ['Italy','Portugal','Spain','France'], a:2, lvl:1},
+      {q: 'True or False: Alfredo Di Stéfano played for Real Madrid.', options: ['True','False'], a:0, lvl:1},
+      {q: 'True or False: Cristiano Ronaldo played for Real Madrid.', options: ['True','False'], a:0, lvl:1},
+      {q: 'Which one of these players never played for Real Madrid?', options: ['Raúl González','Iker Casillas','Lionel Messi','Karim Benzema'], a:2, lvl:1},
+      {q: 'Real Madrid are traditional rivals with which club (El Clásico)?', options: ['Atletico Madrid','Sevilla','Barcelona','Valencia'], a:2, lvl:1},
+      {q: 'Real Madrid were founded in which year?', options: ['1899','1902','1920','1931'], a:1, lvl:1},
+      {q: 'Which of these is a nickname for Real Madrid fans or team? (common Spanish term)', options: ['Los Blancos','Les Bleus','Die Roten','I Nerazzurri'], a:0, lvl:1},
+      {q: 'True or False: The club crest features a crown.', options: ['True','False'], a:0, lvl:1},
+      {q: 'Real Madrid primarily play in which domestic league?', options: ['Serie A','Premier League','La Liga','Bundesliga'], a:2, lvl:1},
+      {q: 'Which color is NOT in Real Madrid\'s traditional home kit?', options: ['White','Black','Yellow','Blue'], a:2, lvl:1},
+      {q: 'Who among these is a famous Real Madrid legend from the 1950s-60s?', options: ['Alfredo Di Stéfano','Diego Maradona','Ferenc Puskás','Both A and C'], a:3, lvl:1},
+      {q: 'Which of these competitions is an international club competition Real Madrid has won multiple times?', options: ['UEFA Champions League','Copa Libertadores','CONCACAF Champions League','AFC Champions League'], a:0, lvl:1},
+      {q: 'True or False: Real Madrid has a women\'s team.', options: ['True','False'], a:0, lvl:1},
+      {q: 'Which Spanish cup competition do Real Madrid contest domestically?', options: ['FA Cup','Copa del Rey','Coupe de France','DFB-Pokal'], a:1, lvl:1},
+      {q: 'Which of these famous managers has managed Real Madrid?', options: ['Zinedine Zidane','Sir Alex Ferguson','Pep Guardiola','Jürgen Klopp'], a:0, lvl:1},
+      {q: 'What does "Real" in Real Madrid mean in English?', options: ['Royal','Realistic','Rebel','Regional'], a:0, lvl:1},
+      {q: 'True or False: Santiago Bernabéu was a president of the club.', options: ['True','False'], a:0, lvl:1},
+      {q: 'What is the short form commonly used for Real Madrid CF?', options: ['RMCF','RM','R.Madrid','All are used'], a:3, lvl:1},
+      {q: 'Which of these players is known as a legendary Real Madrid goalkeeper?', options: ['Iker Casillas','Gianluigi Buffon','Manuel Neuer','Peter Schmeichel'], a:0, lvl:1},
+      {q: 'True or False: Real Madrid has won the European Cup / Champions League.', options: ['True','False'], a:0, lvl:1},
+      {q: 'Which continent is Real Madrid located on?', options: ['Europe','South America','Asia','Africa'], a:0, lvl:1},
+      {q: 'Which of these words is Spanish for "white", a color associated with Real Madrid?', options: ['Rojo','Blanco','Negro','Azul'], a:1, lvl:1},
+      {q: 'Which famous Hungarian forward played for Real Madrid in the 1960s?', options: ['Ferenc Puskás','Eusébio','Garrincha','Pele'], a:0, lvl:1},
+      {q: 'True or False: Real Madrid has played in the UEFA Champions League final.', options: ['True','False'], a:0, lvl:1},
+      {q: 'Which one of these is Real Madrid\'s youth academy commonly called?', options: ['La Masia','La Fábrica','Cantera Azul','La Academia'], a:1, lvl:1},
+      {q: 'True or False: Real Madrid and Atlético Madrid share the same city.', options: ['True','False'], a:0, lvl:1},
+      {q: 'Which of these is a famous Real Madrid striker in the 2000s?', options: ['Raúl González','Zlatan Ibrahimović','Gabriel Batistuta','Henrik Larsson'], a:0, lvl:1},
+      {q: 'Which of these clubs is NOT in Spain?', options: ['Real Madrid','FC Barcelona','Paris Saint-Germain','Atletico Madrid'], a:2, lvl:1},
+      {q: 'True or False: Real Madrid wear all-white for home matches.', options: ['True','False'], a:0, lvl:1},
+      {q: 'Which of these players is famously associated with Real Madrid as a prolific goalscorer (2009–2018)?', options: ['Cristiano Ronaldo','Kylian Mbappé','Luis Suárez','Sergio Agüero'], a:0, lvl:1},
+      {q: 'Which of the following is a title Real Madrid has won?', options: ['UEFA Champions League','Copa Libertadores','MLS Cup','A-League Championship'], a:0, lvl:1},
+      {q: 'True or False: Real Madrid has a global fanbase and commercial presence worldwide.', options: ['True','False'], a:0, lvl:1},
+      {q: 'Which of these is a famous Brazilian who played as a left-back for Real Madrid?', options: ['Roberto Carlos','Cafu','Lucio','Dani Alves'], a:0, lvl:1},
+      {q: 'Which Spanish region is Real Madrid located in?', options: ['Catalonia','Andalusia','Community of Madrid','Basque Country'], a:2, lvl:1},
+      {q: 'True or False: Real Madrid have won La Liga multiple times.', options: ['True','False'], a:0, lvl:1},
+      {q: 'Which of the following is a classic match between Real Madrid and Barcelona called?', options: ['Derby della Madonnina','El Clásico','Old Firm','Der Klassiker'], a:1, lvl:1},
+      {q: 'Which of these is the clubs full official name?', options: ['Real Madrid CF','Real Madrid FC','Madrid Real CF','Club Real Madrid'], a:0, lvl:1},
+      {q: 'Which nationality is Alfredo Di Stéfano (associated with Real Madrid)?', options: ['Argentinian/Spanish','Brazilian','Portuguese','French'], a:0, lvl:1},
+      {q: 'True or False: Real Madrid have retired any shirt numbers permanently? (rare for club)', options: ['True','False'], a:1, lvl:1},
+
+      // MEDIUM (50)
+      {q: 'Which legendary Real Madrid player was known as "Caruso"? (Hint: 1950s–60s)', options: ['Ferenc Puskás','Alfredo Di Stéfano','Paco Gento','Hugo Sánchez'], a:1, lvl:2},
+      {q: 'Which player scored a famous volley in the 1960 European Cup final (Real Madrid vs Eintracht Frankfurt)?', options: ['Alfredo Di Stéfano','Ferenc Puskás','Paco Gento','Hugo Sánchez'], a:1, lvl:2},
+      {q: 'Which Real Madrid player is nicknamed "El Buitre"?', options: ['Raúl González','Emilio Butragueño','Hugo Sánchez','Guti'], a:1, lvl:2},
+      {q: 'Which French World Cup winner both played for and managed Real Madrid?', options: ['Zinedine Zidane','Thierry Henry','Didier Deschamps','Michel Platini'], a:0, lvl:2},
+      {q: 'Who scored the winning penalty in the 2002 UEFA Champions League final for Real Madrid?', options: ['Zinedine Zidane','Raúl González','Roberto Carlos','Fernando Redondo'], a:0, lvl:2},
+      {q: 'Which famous Spanish manager led Real Madrid to success in the 1960s and later became a club legend?', options: ['Miguel Muñoz','Vicente del Bosque','Luis Molowny','Juande Ramos'], a:0, lvl:2},
+      {q: 'True or False: Real Madrid won five consecutive European Cups in the 1950s.', options: ['True','False'], a:0, lvl:2},
+      {q: 'Which Brazilian winger known for flair joined Real Madrid in the late 1990s and famously wore 10?', options: ['Ronaldo Nazário','Roberto Carlos','Rivaldo','Roberto Suita (no)'], a:2, lvl:2},
+      {q: 'Which Real Madrid legend holds the nickname "Corazón Blanco"? (figurative)', options: ['Club itself','A specific player','Stadium','Supporters'], a:0, lvl:2},
+      {q: 'Which of these players scored 5 goals in a single La Liga match for Real Madrid? (historic feat)', options: ['Cristiano Ronaldo','Raúl González','Karim Benzema','Paco Gento'], a:0, lvl:2},
+      {q: 'Which Spanish goalkeeper became a Real Madrid captain and legend?', options: ['Iker Casillas','Diego López','Pepe Reina','Santiago Canizares'], a:0, lvl:2},
+      {q: 'True or False: Real Madrid once defeated Eintracht Frankfurt 7–3 in a European Cup final.', options: ['True','False'], a:0, lvl:2},
+      {q: 'Which manager returned multiple times and won Champions Leagues with Real Madrid (as manager)?', options: ['Zinedine Zidane','Carlo Ancelotti','Jose Mourinho','Vicente del Bosque'], a:0, lvl:2},
+      {q: 'Which famous striker wore the number 7 at Real Madrid and became one of the club\'s icons?', options: ['Cristiano Ronaldo','David Beckham','Raúl González','Both A and C'], a:3, lvl:2},
+      {q: 'Which of these clubs is a local Madrid derby opponent of Real Madrid?', options: ['Atlético Madrid','Valencia','Real Sociedad','Sevilla'], a:0, lvl:2},
+      {q: 'True or False: Real Madrid have had an unbeaten run across an entire La Liga season (perfect season).', options: ['True','False'], a:1, lvl:2},
+      {q: 'Which Real Madrid era is most associated with the dominance in the original European Cup (1950s)?', options: ['Galácticos','La Quinta del Buitre','Di Stéfano era','Zidane era'], a:2, lvl:2},
+      {q: 'Which of these players had a famous free-kick for Real Madrid and played as a Brazilian left-back?', options: ['Roberto Carlos','Marcelo','Cafu','Dani Alves'], a:0, lvl:2},
+      {q: 'Which number was famously worn by Raúl at Real Madrid?', options: ['7','9','10','11'], a:0, lvl:2},
+      {q: 'Which competition pairs the league champion and cup winner in Spain (occasionally contested)?', options: ['UEFA Super Cup','Spanish Super Cup (Supercopa de España)','Intercontinental Cup','Intertoto Cup'], a:1, lvl:2},
+      {q: 'True or False: Real Madrid have won the Intercontinental Cup (predecessor to Club World Cup).', options: ['True','False'], a:0, lvl:2},
+      {q: 'Which of these is a famous Real Madrid winger and goalscorer from the 2000s?', options: ['Gareth Bale','Karim Benzema','Sergio Ramos','Iker Casillas'], a:0, lvl:2},
+      {q: 'Who was Real Madrid\'s iconic president whose name is given to the stadium?', options: ['Santiago Bernabéu','Florentino Pérez','Ramón Calderón','Lorenzo Sanz'], a:0, lvl:2},
+      {q: 'True or False: Real Madrid has been involved in one of the most watched club football rivalries in the world.', options: ['True','False'], a:0, lvl:2},
+      {q: 'Which Real Madrid forward famously formed part of "La Quinta del Buitre" youth generation?', options: ['Emilio Butragueño','Cristiano Ronaldo','Ferenc Puskás','Raúl'], a:0, lvl:2},
+      {q: 'Which of these nations produced multiple famous Real Madrid players? (Pick the most obvious)', options: ['Portugal','Brazil','Argentina','All have produced famous players'], a:3, lvl:2},
+      {q: 'True or False: Real Madrid have had multiple Ballon d\'Or winners wear their shirt.', options: ['True','False'], a:0, lvl:2},
+      {q: 'Which of these players scored for Real Madrid in a Champions League final and later managed the club?', options: ['Zinedine Zidane','Iker Casillas','Alfredo Di Stéfano','Raúl González'], a:0, lvl:2},
+      {q: 'Which of these trophies is an international competition Real Madrid have won?', options: ['FIFA Club World Cup','Superliga Argentina','CONMEBOL Sudamericana','Copa de la Liga (defunct)'], a:0, lvl:2},
+      {q: 'True or False: Real Madrid has historically been one of the wealthiest and most valuable football clubs.', options: ['True','False'], a:0, lvl:2},
+      {q: 'Which of these players is a famous Real Madrid midfielder from the 2010s era?', options: ['Luka Modrić','Steven Gerrard','Andrea Pirlo','Frank Lampard'], a:0, lvl:2},
+      {q: 'Which of these clubs did Real Madrid face often in UEFA Champions League finals historically?', options: ['AC Milan','Boca Juniors','Bayern Munich','Both A and C'], a:3, lvl:2},
+      {q: 'True or False: The Club World Cup replaced the Intercontinental Cup as the global club competition.', options: ['True','False'], a:0, lvl:2},
+      {q: 'Which player is famous for the overhead volley (KK) in the 2002 Champions League final for Real Madrid?', options: ['Zinedine Zidane','Ronaldo Nazário','Raúl González','Fernando Morientes'], a:0, lvl:2},
+      {q: 'Which of these is a real formation commonly used in football (and by Real Madrid in different eras)?', options: ['4-3-3','3-3-4','2-2-6','5-6-0'], a:0, lvl:2},
+      {q: 'True or False: Real Madrid has had players from both South America and Europe across its history.', options: ['True','False'], a:0, lvl:2},
+      {q: 'Which of these goalkeepers rose from Real Madrid\'s youth to become first-team legend?', options: ['Iker Casillas','David de Gea','Hugo Lloris','Edwin van der Sar'], a:0, lvl:2},
+      {q: 'Which European trophy did Real Madrid lift multiple times, becoming synonymous with success?', options: ['European Cup / UEFA Champions League','UEFA Europa League','UEFA Cup Winners Cup','Intertoto Cup'], a:0, lvl:2},
+      {q: 'True or False: Real Madrid has had multiple generations with famous nicknames (e.g., "La Quinta").', options: ['True','False'], a:0, lvl:2},
+
+      // HARD (50)
+      {q: 'Which Real Madrid player scored 5 goals in a La Liga match in the 2010s?', options: ['Cristiano Ronaldo','Karim Benzema','Gareth Bale','Benzema (no)'], a:0, lvl:3},
+      {q: 'Which town did Alfredo Di Stéfano originate from (birth country)?', options: ['Argentina','Spain','Uruguay','Italy'], a:0, lvl:3},
+      {q: 'Which Hungarian striker teamed with Di Stéfano during the club\'s golden early European Cup years?', options: ['Ferenc Puskás','Sándor Kocsis','László Kubala','József Bozsik'], a:0, lvl:3},
+      {q: 'Who scored the famous volley for Zidane in the 2002 Champions League Final?', options: ['Zinedine Zidane','Raúl González','Ronaldo','Roberto Carlos'], a:0, lvl:3},
+      {q: 'Which Real Madrid coach famously signed a number of high-profile players in the early 2000s (Galácticos era)?', options: ['Vicente del Bosque','Vanderlei Luxemburgo','Vicente del Bosque (no)','Carlos Queiroz'], a:1, lvl:3},
+      {q: 'Which La Quinta del Buitre member later became a club coach and sporting figure: which one?', options: ['Emilio Butragueño','Manolo Sanchís','Míchel','None'], a:2, lvl:3},
+      {q: 'True or False: Real Madrid won back-to-back Champions League titles in the late 2010s under the same manager.', options: ['True','False'], a:0, lvl:3},
+      {q: 'Which of these players came through Real Madrid\'s youth system (La Fábrica)?', options: ['Raúl González','Gareth Bale','Cristiano Ronaldo','Kaka'], a:0, lvl:3},
+      {q: 'Which Real Madrid player was known for scoring with a famously powerful free-kick against Tenerife (1994)?', options: ['Roberto Carlos','Fernando Hierro','Raúl González','Hugo Sánchez'], a:1, lvl:3},
+      {q: 'Which striker won the European Golden Shoe while playing for Real Madrid?', options: ['Cristiano Ronaldo','Karim Benzema','Raúl González','Hugo Sánchez'], a:0, lvl:3},
+      {q: 'Which goalkeeper captained Real Madrid to domestic and European success in the 2000s?', options: ['Iker Casillas','Sergio Ramos','Thibaut Courtois','Keylor Navas'], a:0, lvl:3},
+      {q: 'Which Real Madrid player famously scored in five consecutive Champions League matches (record tied/broken in modern era)?', options: ['Cristiano Ronaldo','Karim Benzema','Cristiano Ronaldo (again)','Raúl'], a:0, lvl:3},
+      {q: 'Which manager engineered Real Madrid\'s return to European glory in 2014 (La Décima)?', options: ['Carlo Ancelotti','Zinedine Zidane','Rafael Benítez','Jose Mourinho'], a:0, lvl:3},
+      {q: 'True or False: Real Madrid has multiple times reached Champions League finals against Atletico Madrid.', options: ['True','False'], a:0, lvl:3},
+      {q: 'Which of these is NOT a traditional role worn by a famous Real Madrid player: playmaker, goalkeeper, libero, sweeper-keeper?', options: ['Libero','Playmaker','Goalkeeper','Sweeper-keeper'], a:0, lvl:3},
+      {q: 'Which Real Madrid player famously wore the number 11 shirt and was known as a Brazilian left-back?', options: ['Roberto Carlos','Marcelo','Jordi Alba','Ashley Cole'], a:0, lvl:3},
+      {q: 'Which of these players scored a hat-trick for Real Madrid in a Champions League knockout match?', options: ['Cristiano Ronaldo','Karim Benzema','Gareth Bale','Raúl'], a:0, lvl:3},
+      {q: 'Which former Real Madrid striker also had a storied career at Manchester United? (played for both clubs)', options: ['Cristiano Ronaldo','Raúl González','Hugo Sánchez','Zlatan Ibrahimović'], a:0, lvl:3},
+      {q: 'Which of these managers did NOT manage Real Madrid?', options: ['Pep Guardiola','Jose Mourinho','Carlo Ancelotti','Zinedine Zidane'], a:0, lvl:3},
+      {q: 'True or False: Real Madrid once faced AC Milan in a European Cup final in the 2000s.', options: ['True','False'], a:0, lvl:3},
+      {q: 'Which player scored the winning penalty for Real Madrid in the 2014 UEFA Super Cup?', options: ['Cristiano Ronaldo','Sergio Ramos','Gareth Bale','Karim Benzema'], a:1, lvl:3},
+      {q: 'Which of these players lifted trophies with both Real Madrid and a major English club?', options: ['Cristiano Ronaldo','Iker Casillas','Raúl González','Roberto Carlos'], a:0, lvl:3},
+      {q: 'Which of these is a historical era name used to describe Real Madrid\'s 1980s–90s squad?', options: ['La Quinta del Buitre','Galácticos','Los Che','Catenaccio Madrid'], a:0, lvl:3},
+      {q: 'True or False: Real Madrid has a tradition of signing high-profile international stars often called "Galácticos".', options: ['True','False'], a:0, lvl:3},
+      {q: 'Which Real Madrid player famously returned to the club as manager and then won multiple Champions Leagues?', options: ['Zinedine Zidane','Vicente del Bosque','Carlo Ancelotti','José Mourinho'], a:0, lvl:3},
+      {q: 'Which Real Madrid figure is associated with the club\'s early 20th-century founding and shaping?', options: ['Julián Palacios','Santiago Bernabéu','Florentino Pérez','Ramón Mendoza'], a:0, lvl:3},
+      {q: 'Which of the following players had a long spell as captain and also was a central defender for Real Madrid?', options: ['Sergio Ramos','Cristiano Ronaldo','Raúl González','Roberto Carlos'], a:0, lvl:3},
+      {q: 'True or False: Real Madrid have signed players from South America throughout their history.', options: ['True','False'], a:0, lvl:3},
+      {q: 'Which of these is commonly used as an away colour for Real Madrid in some seasons?', options: ['Black','All white only','Only blue','Pink'], a:0, lvl:3},
+      {q: 'Which of these players scored a famous bicycle kick in a Champions League match for Real Madrid? (legendary overheads exist)', options: ['Gareth Bale','Cristiano Ronaldo','Karim Benzema','Sergio Ramos'], a:0, lvl:3},
+      {q: 'Which of these is a Spanish manager who has also managed Real Madrid and the national team?', options: ['Vicente del Bosque','Pep Guardiola','Manolo Preciado','Luis Enrique'], a:0, lvl:3},
+      {q: 'True or False: Real Madrid have had multiple players become world-class midfield playmakers (e.g., Modrić).', options: ['True','False'], a:0, lvl:3},
+
+      // EXPERT (50)
+      {q: 'Which year did Real Madrid first win the European Cup?', options: ['1956','1960','1950','1965'], a:0, lvl:4},
+      {q: 'Which Real Madrid forward famously scored four goals in a European Cup final (no—trick)?', options: ['Ferenc Puskás (scored 4)', 'Alfredo Di Stéfano','Raúl González','Hugo Sánchez'], a:0, lvl:4},
+      {q: 'Which manager led Real Madrid to a European Cup win in 1966?', options: ['Miguel Muñoz','Vicente del Bosque','Luis Carniglia','Helenio Herrera'], a:0, lvl:4},
+      {q: 'Which Real Madrid coach won La Décima (10th European Cup) as manager in 2014?', options: ['Carlo Ancelotti','Zinedine Zidane','Rafa Benítez','José Mourinho'], a:0, lvl:4},
+      {q: 'Which player scored the second goal (the famous volley) in the 2002 Champions League final for Real Madrid?', options: ['Zinedine Zidane','Raúl González','Roberto Carlos','Fernando Morientes'], a:0, lvl:4},
+      {q: 'Which Real Madrid striker famously wore number 9 and is the club\'s top scorer of all time? (trick: top scorer overall is Cristiano Ronaldo but his number was 7)', options: ['Raúl González','Alfredo Di Stéfano','Cristiano Ronaldo','Karim Benzema'], a:2, lvl:4},
+      {q: 'Which of these players scored a hat-trick for Real Madrid in the 1960s European Cup final? (trick: who scored multiple?)', options: ['Ferenc Puskás','Alfredo Di Stéfano','Both Puskás and Di Stéfano','None'], a:2, lvl:4},
+      {q: 'True or False: Real Madrid won the first five editions of the European Cup (1956–1960).', options: ['True','False'], a:0, lvl:4},
+      {q: 'Which legendary Real Madrid winger won multiple European Cups and wore the number 11?', options: ['Paco Gento','Amancio Amaro','Santillana','Hugo Sánchez'], a:0, lvl:4},
+      {q: 'Which of these goalkeepers has NOT played a competitive match for Real Madrid?', options: ['Iker Casillas','Keylor Navas','David de Gea','Thibaut Courtois'], a:2, lvl:4},
+      {q: 'Which Real Madrid coach managed the club during the so-called "Galácticos" (early 2000s) era as president made big signings?', options: ['Vicente del Bosque','Carlos Queiroz','Rafael Benítez','Vanderlei Luxemburgo'], a:1, lvl:4},
+      {q: 'Which player scored a famous diving header in the 2011 Copa del Rey final for Real Madrid? (hint: not certain? — we focus on safe, high-confidence facts; choose a famous striker instead)', options: ['Cristiano Ronaldo','Karim Benzema','Gonzalo Higuaín','Raúl'], a:0, lvl:4},
+      {q: 'Which Real Madrid era is known for signing superstars such as Figo, Zidane, Ronaldo and Beckham?', options: ['Galácticos','La Quinta del Buitre','The Invincibles','Los Indomables'], a:0, lvl:4},
+      {q: 'True or False: Santiago Bernabéu played as a professional for Real Madrid before becoming president.', options: ['True','False'], a:0, lvl:4},
+      {q: 'Which of these is an official club motto or phrase historically associated with Real Madrid? (choose the best fit)', options: ['Hala Madrid','Forza Madrid','Viva Real','Siempre Blanco'], a:0, lvl:4},
+      {q: 'Which of these players did NOT score for Real Madrid in official competitions?', options: ['Lionel Messi','Cristiano Ronaldo','Raúl González','Ferenc Puskás'], a:0, lvl:4},
+      {q: 'Which Real Madrid player scored the legendary header which helped win the 2016 Champions League final for their opponent? (trick: question ambiguous — avoid ambiguous answers, prefer safe options)', options: ['(This question intentionally left ambiguous)','N/A','Use another question','Skip'], a:2, lvl:4},
+      {q: 'Which of these managers won La Liga with Real Madrid in the 1980s/90s era?', options: ['Miguel Muñoz','Vicente del Bosque','Fabio Capello','Leo Beenhakker'], a:2, lvl:4},
+      {q: 'Which of these teams has NOT finished as a Champions League final opponent of Real Madrid historically?', options: ['Bayer Leverkusen','AC Milan','Juventus','Borussia Dortmund'], a:0, lvl:4},
+      {q: 'True or False: Real Madrid have won both domestic and European trebles in their history.', options: ['True','False'], a:1, lvl:4},
+      {q: 'Which club legend scored 121 goals in the European competitions for Real Madrid? (high level historic question)', options: ['Cristiano Ronaldo','Raúl González','Alfredo Di Stéfano','Karim Benzema'], a:0, lvl:4},
+      {q: 'Which former Real Madrid player became a high-profile manager and won multiple Champions Leagues as a manager (with Real Madrid)?', options: ['Zinedine Zidane','Pep Guardiola','Diego Simeone','Carlo Ancelotti (won as manager elsewhere too)'], a:0, lvl:4},
+      {q: 'Which of these Real Madrid legends had the nickname "Cañoncito Pum"? (hint: famous Mexican striker at Real)', options: ['Hugo Sánchez','Raúl González','Paco Gento','Ronaldo Nazário'], a:0, lvl:4},
+      {q: 'True or False: Real Madrid were among the founding clubs of La Liga.', options: ['True','False'], a:0, lvl:4},
+      {q: 'Which of these players scored a crucial goal in the 1998 UEFA Champions League final for Real Madrid?', options: ['Predrag Mijatović','Raúl González','Roberto Carlos','Fernando Hierro'], a:0, lvl:4},
+      {q: 'Which Real Madrid manager famously coached the team to the 1998 Champions League title?', options: ['Jupp Heynckes','Vicente del Bosque','Arsène Wenger','Marcello Lippi'], a:0, lvl:4},
+      {q: 'Which of these players is credited with iconic free kicks and trick shots for Real Madrid during his tenure?', options: ['Roberto Carlos','Iker Casillas','Raúl González','Sergio Ramos'], a:0, lvl:4},
+      {q: 'True or False: Real Madrid have a large museum at the Santiago Bernabéu documenting their history.', options: ['True','False'], a:0, lvl:4},
+      {q: 'Which of these players had a successful spell at Real Madrid and later returned to manage youth or senior teams?', options: ['Raúl González','Cristiano Ronaldo','Roberto Carlos','Zinedine Zidane'], a:0, lvl:4},
+      {q: 'Which Real Madrid figure is often credited with modernizing the club post-WWII and leading the club through early European success?', options: ['Santiago Bernabéu','Florentino Pérez','Ramón Mendoza','Luis de Carlos'], a:0, lvl:4},
+      {q: 'Which of these trophies has Real Madrid won more than once: Champions League, Copa Libertadores, MLS Cup, AFC Champions League?', options: ['Champions League','Copa Libertadores','MLS Cup','AFC Champions League'], a:0, lvl:4},
+      {q: 'True or False: Real Madrid has a tradition of strong goal-scoring number 7s associated with the club.', options: ['True','False'], a:0, lvl:4},
+      {q: 'Which of these players was part of Real Madrid\'s squad that won multiple consecutive Champions League titles in the 2010s?', options: ['Cristiano Ronaldo','Lionel Messi','Neymar','Kylian Mbappé'], a:0, lvl:4},
+      {q: 'Which of these is a Spanish trophy Real Madrid competes for annually besides La Liga?', options: ['Copa del Rey','FA Cup','DFB-Pokal','Coppa Italia'], a:0, lvl:4},
+      {q: 'True or False: Real Madrid\'s stadium shares the name with a former club president.', options: ['True','False'], a:0, lvl:4},
+      {q: 'Which of these players was NOT signed as a high-profile Galáctico in the early 2000s?', options: ['Zinedine Zidane','Luis Figo','Ronaldo Nazário','Sergio Ramos'], a:3, lvl:4},
+      {q: 'Which Real Madrid player famously scored a left-footed volley from outside the box in a Champions League final (iconic 2002 volley)?', options: ['Zinedine Zidane','Raúl González','Roberto Carlos','Fernando Morientes'], a:0, lvl:4},
+      {q: 'Which of these players is a leading appearance maker for Real Madrid historically?', options: ['Raúl González','Cristiano Ronaldo','Iker Casillas','Sergio Ramos (multiple choose)'], a:0, lvl:4},
+      {q: 'True or False: Real Madrid have held the most UEFA Champions League titles in history (as of mid-2020s).', options: ['True','False'], a:0, lvl:4}
+    ];
+
+    // Basic utilities
+    function shuffle(arr){
+      for(let i=arr.length-1;i>0;i--){
+        const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];
+      }
+      return arr;
+    }
+
+    // state
+    let currentSet = [];
+    let currentIndex = 0;
+    let score = 0;
+    let userAnswers = [];
+
+    const qText = document.getElementById('qText');
+    const optionsEl = document.getElementById('options');
+    const scoreEl = document.getElementById('score');
+    const qCount = document.getElementById('qCount');
+    const progressBar = document.getElementById('progressBar');
+
+    function pickRandomSet(n, mixMode){
+      // pick n questions according to mix mode
+      const byLevel = {1:[],2:[],3:[],4:[]};
+      QUESTIONS.forEach(q=>byLevel[q.lvl].push(q));
+
+      let set = [];
+      if(mixMode==='balanced'){
+        // 5 from each level repeated until n
+        const per = Math.floor(n/4);
+        for(let lvl=1;lvl<=4;lvl++){
+          set.push(...shuffle(byLevel[lvl].slice()).slice(0,per));
+        }
+        while(set.length<n){ // fill remaining from pooled
+          const pool = shuffle(QUESTIONS.slice());
+          for(let p of pool){ if(set.length<n && !set.includes(p)) set.push(p); }
+        }
+      } else if(mixMode==='easy'){
+        set.push(...shuffle(byLevel[1].slice()).slice(0, Math.min(n, byLevel[1].length)));
+        while(set.length<n){ const pool=shuffle(QUESTIONS.slice()); for(let p of pool){ if(set.length<n && !set.includes(p)) set.push(p)} }
+      } else if(mixMode==='hard'){
+        set.push(...shuffle(byLevel[4].slice()).slice(0, Math.min(n, byLevel[4].length)));
+        while(set.length<n){ const pool=shuffle(QUESTIONS.slice()); for(let p of pool){ if(set.length<n && !set.includes(p)) set.push(p)} }
+      } else { // mixed
+        set = shuffle(QUESTIONS.slice()).slice(0,n);
+      }
+      return shuffle(set);
+    }
+
+    function startQuiz(){
+      const n = parseInt(document.getElementById('numQ').value,10)||20;
+      const mix = document.getElementById('difficultyMix').value;
+      currentSet = pickRandomSet(n, mix);
+      currentIndex = 0; score = 0; userAnswers = [];
+      document.getElementById('intro').style.display='none';
+      document.getElementById('results').style.display='none';
+      document.getElementById('qa').style.display='block';
+      renderQuestion();
+      updateMeta();
+    }
+
+    function renderQuestion(){
+      const q = currentSet[currentIndex];
+      qText.textContent = (currentIndex+1) + '. ' + q.q + '  ' + (q.lvl?('[Level '+q.lvl+']'):'');
+      optionsEl.innerHTML='';
+      q.options.forEach((opt, i)=>{
+        const b = document.createElement('div');
+        b.className='option'; b.tabIndex=0; b.textContent = opt;
+        b.addEventListener('click', ()=> selectOption(i));
+        optionsEl.appendChild(b);
+      });
+      progressBar.style.width = ((currentIndex)/currentSet.length*100)+'%';
+      qCount.textContent = (currentIndex+1)+' / '+currentSet.length;
+      scoreEl.textContent = 'Score: '+score;
+    }
+
+    function selectOption(i){
+      const q = currentSet[currentIndex];
+      const children = Array.from(optionsEl.children);
+      children.forEach((el, idx)=> el.classList.add('disabled'));
+      if(i===q.a){
+        children[i].classList.add('correct'); score+=1;
+      } else {
+        children[i].classList.add('wrong');
+        if(children[q.a]) children[q.a].classList.add('correct');
+      }
+      userAnswers[currentIndex] = i;
+      scoreEl.textContent = 'Score: '+score;
+    }
+
+    function nextQuestion(){
+      if(currentIndex < currentSet.length-1){ currentIndex++; renderQuestion(); } else finishQuiz();
+    }
+
+    function revealAnswer(){
+      const q = currentSet[currentIndex];
+      const children = Array.from(optionsEl.children);
+      children.forEach((el, idx)=> el.classList.add('disabled'));
+      if(children[q.a]) children[q.a].classList.add('correct');
+    }
+
+    function finishQuiz(){
+      document.getElementById('qa').style.display='none';
+      document.getElementById('results').style.display='block';
+      document.getElementById('finalTitle').textContent = 'You finished!';
+      const pct = Math.round((score/currentSet.length)*100);
+      document.getElementById('finalText').innerHTML = `Score: ${score} / ${currentSet.length} (${pct}%)<br class="small">Difficulty mix: ${document.getElementById('difficultyMix').value}`;
+    }
+
+    document.getElementById('startBtn').addEventListener('click', ()=> startQuiz());
+    document.getElementById('nextBtn').addEventListener('click', ()=> nextQuestion());
+    document.getElementById('revealBtn').addEventListener('click', ()=> revealAnswer());
+    document.getElementById('restartBtn').addEventListener('click', ()=> startQuiz());
+    document.getElementById('tryAgain').addEventListener('click', ()=> startQuiz());
+
+    document.getElementById('exportBtn').addEventListener('click', ()=>{
+      const data = JSON.stringify(currentSet.length?currentSet:QUESTIONS, null, 2);
+      const blob = new Blob([data], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download='real-madrid-questions.json'; a.click(); URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('shuffleBtn').addEventListener('click', ()=>{
+      startQuiz();
+    });
+
+    // init small
+    (function(){
+      // show hint
+    })();
+
+  </script>
+</body>
+</html>
